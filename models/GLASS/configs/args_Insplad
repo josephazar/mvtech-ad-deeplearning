@@ -1,0 +1,50 @@
+--gpu 0
+--seed 0
+--test ckpt
+net
+-b wideresnet50
+-le layer2
+-le layer3
+--pretrain_embed_dimension 1536
+--target_embed_dimension 1536
+--patchsize 3
+--meta_epochs 640
+--eval_epochs 1
+--dsc_layers 2
+--dsc_hidden 1024
+--pre_proj 1
+--mining 1
+--noise 0.015
+--radius 0.75
+--p 0.5
+--step 20
+--limit 392
+dataset
+--distribution 0
+--mean 0.5
+--std 0.1
+--fg 2
+--rand_aug 1
+--batch_size 8
+--resize 288
+--imagesize 288
+-d damper-preformed
+-d damper-stockbridge
+-d glass-insulator
+-d glass-insulator-big-shackle
+-d glass-insulator-small-shackle
+-d glass-insulator-tower-shackle
+-d lightning-rod-shackle
+-d lightning-rod-suspension
+-d plate
+-d polymer-insulator
+-d polymer-insulator-lower-shackle
+-d polymer-insulator-tower-shackle
+-d polymer-insulator-upper-shackle
+-d spacer
+-d vari-grip
+-d yoke
+-d yoke-suspension
+insplad
+/root/dataset/Insplad
+/root/dataset/dtd/images

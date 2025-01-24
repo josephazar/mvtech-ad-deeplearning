@@ -1,0 +1,6 @@
+datasets/*
+!datasets/.gitkeep
+
+# IDE profiles exclude
+.idea/
+.vscode/

@@ -1,0 +1,32 @@
+- name: mvtec-ad
+  texture_list:
+    - carpet
+    - zipper
+    - leather
+    - tile
+    - wood
+    - grid
+
+- name: btad
+  texture_list:
+    - '02'
+
+- name: insplad
+  texture_list: []
+
+- name: mpdd
+  texture_list: []
+
+- name: vad
+  texture_list:
+    - '0'
+
+- name: visa
+  texture_list: []
+
+- name: wfdd
+  texture_list:
+    - grey_cloth
+    - grid_cloth
+    - pink_flower
+    - yellow_cloth
