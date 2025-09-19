@@ -4,3 +4,9 @@ datasets/*
 # IDE profiles exclude
 .idea/
 .vscode/
+
+.claude
+*.tex
+*.bib
+*.txt
+

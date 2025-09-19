@@ -1,0 +1,118 @@
+# Unified Configuration for MVTec-AD Evaluation
+# This configuration file is used by all model wrappers and evaluation scripts
+
+dataset:
+  name: "MVTec-AD"
+  path: "./datasets/mvtec_anomaly_detection"  # Will be overridden by command line or auto-detected
+  categories:
+    - bottle
+    - cable
+    - capsule
+    - carpet
+    - grid
+    - hazelnut
+    - leather
+    - metal_nut
+    - pill
+    - screw
+    - tile
+    - toothbrush
+    - transistor
+    - wood
+    - zipper
+
+  # Image preprocessing
+  image_size: 448
+  crop_size: 392
+  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_std: [0.229, 0.224, 0.225]
+
+evaluation:
+  # Batch size for inference
+  batch_size: 16
+
+  # Number of workers for data loading
+  num_workers: 4
+
+  # Metrics to compute
+  metrics:
+    - image_auroc
+    - pixel_auroc
+    - pro_score
+
+  # Save results
+  save_results: true
+  results_dir: "./results"
+
+  # Visualization
+  save_visualizations: true
+  num_visualizations: 5  # Number of samples to visualize per category
+
+models:
+  glass:
+    enabled: true
+    backbone: "wide_resnet50_2"
+    layers_to_extract_from: ["layer2", "layer3"]
+    pretrain_embed_dimension: 1024
+    target_embed_dimension: 1024
+    patchsize: 3
+    dsc_layers: 2
+    dsc_hidden: 1024
+    meta_epochs: 640
+    lr: 0.0001
+
+  ddad:
+    enabled: true
+    model_type: "denoising_diffusion"
+    image_size: 256
+    channels: 128
+    num_res_blocks: 2
+    learn_sigma: true
+    class_cond: false
+    diffusion_steps: 1000
+    noise_schedule: "linear"
+    rescale_learned_sigmas: false
+    rescale_timesteps: false
+
+  diffusion_ad:
+    enabled: true
+    img_size: 256
+    noise_steps: 1000
+    beta_start: 0.0001
+    beta_end: 0.02
+    batch_size: 16
+
+  dinomaly:
+    enabled: true
+    model_type: "dinomaly_v2"
+    vit_model: "vit_base_patch16_224"
+    feature_dim: 768
+    image_size: 448
+    crop_size: 392
+    total_iters: 10000
+    batch_size: 16
+    lr: 0.001
+
+# Runtime settings
+runtime:
+  # Device settings
+  device: "auto"  # auto, cuda, cpu
+  gpu_id: 0
+
+  # Reproducibility
+  seed: 42
+  deterministic: true
+
+  # Performance
+  use_amp: false  # Automatic Mixed Precision
+  compile_model: false  # PyTorch 2.0 compile
+
+  # Logging
+  log_level: "INFO"
+  log_dir: "./logs"
+
+  # For Google Colab
+  colab:
+    mount_drive: true
+    drive_path: "/content/drive"
+    data_path: "/content/drive/MyDrive/mvtec_data"
