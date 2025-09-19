@@ -59,22 +59,73 @@ def extract_archive(archive_path, extract_to, archive_format):
     """Extract archive based on format."""
     print(f"Extracting {archive_path}...")
 
-    if archive_format == "tar.xz":
-        with tarfile.open(archive_path, 'r:xz') as tar:
-            members = tar.getmembers()
-            for member in tqdm(members, desc="Extracting"):
-                tar.extract(member, path=extract_to)
-    elif archive_format == "tar":
-        with tarfile.open(archive_path, 'r') as tar:
-            members = tar.getmembers()
-            for member in tqdm(members, desc="Extracting"):
-                tar.extract(member, path=extract_to)
-    elif archive_format == "zip":
-        with zipfile.ZipFile(archive_path, 'r') as zip_ref:
-            for member in tqdm(zip_ref.namelist(), desc="Extracting"):
-                zip_ref.extract(member, extract_to)
+    # Use local temp directory if extracting to Google Drive
+    use_temp = "/content/drive" in str(extract_to)
+    if use_temp:
+        import tempfile
+        temp_dir = tempfile.mkdtemp(prefix="dataset_extract_")
+        actual_extract_to = Path(temp_dir)
+        print(f"Using temporary directory for extraction: {temp_dir}")
     else:
-        raise ValueError(f"Unknown archive format: {archive_format}")
+        actual_extract_to = extract_to
+
+    try:
+        if archive_format == "tar.xz":
+            with tarfile.open(archive_path, 'r:xz') as tar:
+                members = tar.getmembers()
+                for member in tqdm(members, desc="Extracting"):
+                    tar.extract(member, path=actual_extract_to)
+        elif archive_format == "tar":
+            with tarfile.open(archive_path, 'r') as tar:
+                members = tar.getmembers()
+                for member in tqdm(members, desc="Extracting"):
+                    tar.extract(member, path=actual_extract_to)
+        elif archive_format == "zip":
+            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                for member in tqdm(zip_ref.namelist(), desc="Extracting"):
+                    zip_ref.extract(member, actual_extract_to)
+        else:
+            raise ValueError(f"Unknown archive format: {archive_format}")
+
+        # If we used temp directory, move to final location
+        if use_temp:
+            print(f"Moving extracted files to {extract_to}...")
+            import shutil
+
+            # Find the actual dataset folder in temp directory
+            extracted_items = list(actual_extract_to.iterdir())
+            if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                # Single folder extracted, move its contents
+                source_dir = extracted_items[0]
+                target_dir = extract_to / source_dir.name
+
+                if target_dir.exists():
+                    print(f"Removing existing {target_dir}")
+                    shutil.rmtree(target_dir)
+
+                print(f"Moving {source_dir} to {target_dir}")
+                shutil.move(str(source_dir), str(target_dir))
+            else:
+                # Multiple items, move all
+                for item in extracted_items:
+                    target = extract_to / item.name
+                    if target.exists():
+                        if target.is_dir():
+                            shutil.rmtree(target)
+                        else:
+                            target.unlink()
+                    shutil.move(str(item), str(target))
+
+            # Clean up temp directory
+            shutil.rmtree(temp_dir)
+            print("Temporary directory cleaned up")
+
+    except Exception as e:
+        print(f"Error during extraction: {e}")
+        if use_temp and 'temp_dir' in locals():
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
 
 
 def download_mvtec(data_dir, force_download=False):
@@ -184,28 +235,37 @@ def download_all_datasets(data_dir, datasets_to_download=None, force_download=Fa
     return dataset_paths
 
 
-def setup_colab_environment():
-    """Setup environment for Google Colab."""
+def setup_colab_environment(use_drive=True):
+    """Setup environment for Google Colab.
+
+    Args:
+        use_drive: If True, try to use Google Drive. If False, use local storage.
+    """
     try:
         import google.colab
         IN_COLAB = True
         print("Running in Google Colab environment")
 
-        # Mount Google Drive if needed
-        from google.colab import drive
-        drive_mounted = False
-        try:
-            drive.mount('/content/drive')
-            drive_mounted = True
-            print("Google Drive mounted at /content/drive")
-        except:
-            print("Could not mount Google Drive. Using local storage.")
+        # Mount Google Drive if requested
+        if use_drive:
+            from google.colab import drive
+            drive_mounted = False
+            try:
+                drive.mount('/content/drive')
+                drive_mounted = True
+                print("Google Drive mounted at /content/drive")
 
-        # Set default data directory
-        if drive_mounted:
-            data_dir = "/content/drive/MyDrive/anomaly_detection_data"
+                # Set data directory in Drive
+                data_dir = "/content/drive/MyDrive/anomaly_detection_data"
+                print(f"Will save datasets to Google Drive: {data_dir}")
+            except Exception as e:
+                print(f"Could not mount Google Drive: {e}")
+                print("Falling back to local storage.")
+                data_dir = "/content/anomaly_detection_data"
         else:
+            print("Using local Colab storage (faster but temporary)")
             data_dir = "/content/anomaly_detection_data"
+            drive_mounted = False
 
         return data_dir
 
@@ -236,12 +296,17 @@ def main():
         action="store_true",
         help="Force re-download even if dataset exists"
     )
+    parser.add_argument(
+        "--use-local",
+        action="store_true",
+        help="Use local storage in Colab instead of Google Drive (faster but temporary)"
+    )
 
     args = parser.parse_args()
 
     # Auto-detect environment and set data directory
     if args.data_dir is None:
-        args.data_dir = setup_colab_environment()
+        args.data_dir = setup_colab_environment(use_drive=not args.use_local)
 
     print(f"Data directory: {args.data_dir}")
 
