@@ -94,8 +94,10 @@ def extract_archive(archive_path, extract_to, archive_format):
 
             # Find the actual dataset folder in temp directory
             extracted_items = list(actual_extract_to.iterdir())
+            print(f"Found {len(extracted_items)} items in temp directory")
+
             if len(extracted_items) == 1 and extracted_items[0].is_dir():
-                # Single folder extracted, move its contents
+                # Single folder extracted, move it
                 source_dir = extracted_items[0]
                 target_dir = extract_to / source_dir.name
 
@@ -103,10 +105,11 @@ def extract_archive(archive_path, extract_to, archive_format):
                     print(f"Removing existing {target_dir}")
                     shutil.rmtree(target_dir)
 
-                print(f"Moving {source_dir} to {target_dir}")
+                print(f"Moving {source_dir.name} to {target_dir}")
                 shutil.move(str(source_dir), str(target_dir))
             else:
-                # Multiple items, move all
+                # Multiple items (MVTec extracts categories directly)
+                print(f"Moving {len(extracted_items)} items to {extract_to}")
                 for item in extracted_items:
                     target = extract_to / item.name
                     if target.exists():
@@ -114,6 +117,7 @@ def extract_archive(archive_path, extract_to, archive_format):
                             shutil.rmtree(target)
                         else:
                             target.unlink()
+                    print(f"  Moving {item.name}")
                     shutil.move(str(item), str(target))
 
             # Clean up temp directory
@@ -131,11 +135,19 @@ def extract_archive(archive_path, extract_to, archive_format):
 def download_mvtec(data_dir, force_download=False):
     """Download MVTec-AD dataset."""
     dataset_info = DATASETS_INFO["mvtec"]
-    dataset_path = data_dir / dataset_info["folder_name"]
 
-    if dataset_path.exists() and not force_download:
-        print(f"MVTec-AD already exists at {dataset_path}")
-        return dataset_path
+    # Check if MVTec categories already exist directly in data_dir
+    mvtec_categories = dataset_info["categories"]
+    existing_categories = [cat for cat in mvtec_categories if (data_dir / cat).exists()]
+
+    if len(existing_categories) == len(mvtec_categories) and not force_download:
+        print(f"MVTec-AD already exists at {data_dir}")
+        print(f"Found all {len(existing_categories)} categories")
+        return data_dir
+    elif len(existing_categories) > 0 and not force_download:
+        print(f"Found {len(existing_categories)}/{len(mvtec_categories)} MVTec categories")
+        missing = set(mvtec_categories) - set(existing_categories)
+        print(f"Missing categories: {missing}")
 
     archive_path = data_dir / f"mvtec.tar.xz"
 
@@ -143,44 +155,65 @@ def download_mvtec(data_dir, force_download=False):
         print("Downloading MVTec-AD dataset...")
         download_file(dataset_info["url"], str(archive_path), "MVTec-AD")
 
+    print("Extracting MVTec-AD dataset...")
     extract_archive(archive_path, data_dir, dataset_info["format"])
 
     # Clean up
     if archive_path.exists():
         archive_path.unlink()
 
-    return dataset_path
+    # Verify extraction
+    existing_categories = [cat for cat in mvtec_categories if (data_dir / cat).exists()]
+    print(f"Extraction complete. Found {len(existing_categories)} categories")
+
+    return data_dir
 
 
 def download_visa(data_dir, force_download=False):
     """Download VisA dataset."""
     dataset_info = DATASETS_INFO["visa"]
-    dataset_path = data_dir / dataset_info["folder_name"]
 
-    if dataset_path.exists() and not force_download:
-        print(f"VisA already exists at {dataset_path}")
-        return dataset_path
+    # Check multiple possible paths for VisA
+    possible_paths = [
+        data_dir / "VisA",
+        data_dir / "VisA_pytorch",
+        data_dir / "visa"
+    ]
+
+    for path in possible_paths:
+        if path.exists() and not force_download:
+            # Verify it has categories
+            if path.is_dir():
+                subdirs = [d for d in path.iterdir() if d.is_dir()]
+                if len(subdirs) > 0:
+                    print(f"VisA already exists at {path}")
+                    print(f"Found {len(subdirs)} categories/folders")
+                    return path
 
     archive_path = data_dir / "visa.tar"
 
     if not archive_path.exists() or force_download:
         print("Downloading VisA dataset...")
-        if dataset_info["url"]:
-            download_file(dataset_info["url"], str(archive_path), "VisA")
-        else:
-            print("Alternative: Using wget to download VisA...")
-            subprocess.run([
-                "wget", "-O", str(archive_path),
-                "https://amazon-visual-anomaly.s3.us-west-2.amazonaws.com/VisA_20220922.tar"
-            ])
+        download_file(dataset_info["url"], str(archive_path), "VisA")
 
+    print("Extracting VisA dataset...")
     extract_archive(archive_path, data_dir, dataset_info["format"])
 
     # Clean up
     if archive_path.exists():
         archive_path.unlink()
 
-    return dataset_path
+    # Find where it was extracted
+    for path in possible_paths:
+        if path.exists():
+            subdirs = [d for d in path.iterdir() if d.is_dir()]
+            if len(subdirs) > 0:
+                print(f"VisA extracted to {path}")
+                return path
+
+    # Default return
+    print(f"Warning: Could not verify VisA extraction location")
+    return data_dir / "VisA"
 
 
 
