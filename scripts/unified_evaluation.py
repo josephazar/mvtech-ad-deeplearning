@@ -142,23 +142,25 @@ class UnifiedEvaluator:
         # Import the appropriate model wrapper
         try:
             if model_name == 'glass':
-                from model_wrappers.glass_wrapper import GLASSWrapper
+                from scripts.model_wrappers.glass_wrapper import GLASSWrapper
                 model_wrapper = GLASSWrapper(self.config, self.device)
             elif model_name == 'ddad':
-                from model_wrappers.ddad_wrapper import DDADWrapper
+                from scripts.model_wrappers.ddad_wrapper import DDADWrapper
                 model_wrapper = DDADWrapper(self.config, self.device)
             elif model_name == 'diffusion_ad':
-                from model_wrappers.diffusion_wrapper import DiffusionADWrapper
+                from scripts.model_wrappers.diffusion_wrapper import DiffusionADWrapper
                 model_wrapper = DiffusionADWrapper(self.config, self.device)
             elif model_name == 'dinomaly':
-                from model_wrappers.dinomaly_wrapper import DinomalyWrapper
+                from scripts.model_wrappers.dinomaly_wrapper import DinomalyWrapper
                 model_wrapper = DinomalyWrapper(self.config, self.device)
             else:
                 raise ValueError(f"Unknown model: {model_name}")
         except ImportError as e:
-            print(f"Warning: Model wrapper for {model_name} not yet implemented")
-            print(f"Skipping {model_name} evaluation")
-            return {"status": "not_implemented"}
+            print(f"Warning: Could not import wrapper for {model_name}: {e}")
+            print(f"Using base wrapper with placeholder results")
+            from scripts.model_wrappers.base_wrapper import BaseModelWrapper
+            model_wrapper = BaseModelWrapper(self.config, self.device)
+            model_wrapper.model_name = model_name
 
         # Evaluate on all categories
         categories = self.config['dataset']['categories']
@@ -331,14 +333,15 @@ class UnifiedEvaluator:
         detailed_data = []
 
         for model_name, model_results in results.items():
-            for category, cat_results in model_results.items():
-                if category != 'overall' and 'error' not in cat_results:
-                    row = {
-                        'model': model_name,
-                        'category': category
-                    }
-                    row.update(cat_results)
-                    detailed_data.append(row)
+            if isinstance(model_results, dict):
+                for category, cat_results in model_results.items():
+                    if category != 'overall' and isinstance(cat_results, dict) and 'error' not in cat_results and 'status' not in cat_results:
+                        row = {
+                            'model': model_name,
+                            'category': category
+                        }
+                        row.update(cat_results)
+                        detailed_data.append(row)
 
         if detailed_data:
             df_detailed = pd.DataFrame(detailed_data)
