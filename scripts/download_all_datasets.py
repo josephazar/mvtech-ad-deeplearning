@@ -102,23 +102,27 @@ def extract_archive(archive_path, extract_to, archive_format):
                 target_dir = extract_to / source_dir.name
 
                 if target_dir.exists():
-                    print(f"Removing existing {target_dir}")
-                    shutil.rmtree(target_dir)
-
-                print(f"Moving {source_dir.name} to {target_dir}")
-                shutil.move(str(source_dir), str(target_dir))
+                    print(f"Warning: {target_dir.name} already exists, skipping...")
+                else:
+                    print(f"Moving {source_dir.name} to {target_dir}")
+                    shutil.move(str(source_dir), str(target_dir))
             else:
                 # Multiple items (MVTec extracts categories directly)
                 print(f"Moving {len(extracted_items)} items to {extract_to}")
+                skipped = 0
+                moved = 0
+
                 for item in extracted_items:
                     target = extract_to / item.name
                     if target.exists():
-                        if target.is_dir():
-                            shutil.rmtree(target)
-                        else:
-                            target.unlink()
-                    print(f"  Moving {item.name}")
-                    shutil.move(str(item), str(target))
+                        print(f"  Skipping {item.name} (already exists)")
+                        skipped += 1
+                    else:
+                        print(f"  Moving {item.name}")
+                        shutil.move(str(item), str(target))
+                        moved += 1
+
+                print(f"Moved {moved} items, skipped {skipped} existing items")
 
             # Clean up temp directory
             shutil.rmtree(temp_dir)
@@ -144,27 +148,35 @@ def download_mvtec(data_dir, force_download=False):
         print(f"MVTec-AD already exists at {data_dir}")
         print(f"Found all {len(existing_categories)} categories")
         return data_dir
-    elif len(existing_categories) > 0 and not force_download:
+    elif len(existing_categories) > 10 and not force_download:
+        # If we have most categories, consider it complete
         print(f"Found {len(existing_categories)}/{len(mvtec_categories)} MVTec categories")
-        missing = set(mvtec_categories) - set(existing_categories)
-        print(f"Missing categories: {missing}")
+        print("Dataset appears to be mostly complete, skipping download")
+        return data_dir
 
     archive_path = data_dir / f"mvtec.tar.xz"
 
-    if not archive_path.exists() or force_download:
-        print("Downloading MVTec-AD dataset...")
-        download_file(dataset_info["url"], str(archive_path), "MVTec-AD")
+    # Only download if we have very few or no categories
+    if len(existing_categories) < 5:
+        if not archive_path.exists() or force_download:
+            print("Downloading MVTec-AD dataset...")
+            download_file(dataset_info["url"], str(archive_path), "MVTec-AD")
 
-    print("Extracting MVTec-AD dataset...")
-    extract_archive(archive_path, data_dir, dataset_info["format"])
+        print("Extracting MVTec-AD dataset...")
+        extract_archive(archive_path, data_dir, dataset_info["format"])
 
-    # Clean up
-    if archive_path.exists():
-        archive_path.unlink()
+        # Clean up archive
+        if archive_path.exists():
+            try:
+                archive_path.unlink()
+            except:
+                print("Could not remove archive file")
+    else:
+        print(f"Found {len(existing_categories)} existing categories, skipping download")
 
-    # Verify extraction
+    # Final verification
     existing_categories = [cat for cat in mvtec_categories if (data_dir / cat).exists()]
-    print(f"Extraction complete. Found {len(existing_categories)} categories")
+    print(f"MVTec-AD: Found {len(existing_categories)}/{len(mvtec_categories)} categories")
 
     return data_dir
 
@@ -172,48 +184,64 @@ def download_mvtec(data_dir, force_download=False):
 def download_visa(data_dir, force_download=False):
     """Download VisA dataset."""
     dataset_info = DATASETS_INFO["visa"]
+    visa_categories = dataset_info["categories"]
 
-    # Check multiple possible paths for VisA
-    possible_paths = [
-        data_dir / "VisA",
-        data_dir / "VisA_pytorch",
-        data_dir / "visa"
-    ]
+    # Check if VisA exists in a subfolder
+    visa_folder = data_dir / "VisA"
+    if visa_folder.exists() and not force_download:
+        subdirs = [d.name for d in visa_folder.iterdir() if d.is_dir()]
+        if len(subdirs) > 0:
+            print(f"VisA already exists at {visa_folder}")
+            print(f"Found {len(subdirs)} categories/folders")
+            return visa_folder
 
-    for path in possible_paths:
-        if path.exists() and not force_download:
-            # Verify it has categories
-            if path.is_dir():
-                subdirs = [d for d in path.iterdir() if d.is_dir()]
-                if len(subdirs) > 0:
-                    print(f"VisA already exists at {path}")
-                    print(f"Found {len(subdirs)} categories/folders")
-                    return path
+    # Check if VisA categories exist directly in data_dir (mixed with MVTec)
+    existing_visa_cats = [cat for cat in visa_categories if (data_dir / cat).exists()]
+
+    if len(existing_visa_cats) == len(visa_categories) and not force_download:
+        print(f"VisA categories found directly in {data_dir}")
+        print(f"Found all {len(existing_visa_cats)} VisA categories")
+        print("Note: VisA is mixed with MVTec in the same directory")
+        return data_dir
+    elif len(existing_visa_cats) > 8 and not force_download:
+        print(f"Found {len(existing_visa_cats)}/{len(visa_categories)} VisA categories in {data_dir}")
+        print("VisA appears to be mostly complete")
+        return data_dir
 
     archive_path = data_dir / "visa.tar"
 
-    if not archive_path.exists() or force_download:
-        print("Downloading VisA dataset...")
-        download_file(dataset_info["url"], str(archive_path), "VisA")
+    # Only download if we have very few VisA categories
+    if len(existing_visa_cats) < 5:
+        if not archive_path.exists() or force_download:
+            print("Downloading VisA dataset...")
+            download_file(dataset_info["url"], str(archive_path), "VisA")
 
-    print("Extracting VisA dataset...")
-    extract_archive(archive_path, data_dir, dataset_info["format"])
+        print("Extracting VisA dataset...")
+        extract_archive(archive_path, data_dir, dataset_info["format"])
 
-    # Clean up
-    if archive_path.exists():
-        archive_path.unlink()
+        # Clean up
+        if archive_path.exists():
+            try:
+                archive_path.unlink()
+            except:
+                print("Could not remove archive file")
+    else:
+        print(f"Found {len(existing_visa_cats)} existing VisA categories, skipping download")
 
-    # Find where it was extracted
-    for path in possible_paths:
-        if path.exists():
-            subdirs = [d for d in path.iterdir() if d.is_dir()]
-            if len(subdirs) > 0:
-                print(f"VisA extracted to {path}")
-                return path
+    # Check where VisA ended up
+    if visa_folder.exists():
+        print(f"VisA extracted to {visa_folder}")
+        return visa_folder
 
-    # Default return
-    print(f"Warning: Could not verify VisA extraction location")
-    return data_dir / "VisA"
+    # Check if extracted directly to data_dir
+    existing_visa_cats = [cat for cat in visa_categories if (data_dir / cat).exists()]
+    if len(existing_visa_cats) > 0:
+        print(f"VisA categories extracted to {data_dir} (mixed with MVTec)")
+        print(f"Found {len(existing_visa_cats)} VisA categories")
+        return data_dir
+
+    print("Warning: Could not verify VisA location")
+    return data_dir
 
 
 
